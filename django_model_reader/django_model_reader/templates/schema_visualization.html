@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+{% block content %}
+  <div id="database-schema"></div>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      // Extracted data from the Django context
+        const schemaData = {{ schema_data|safe }};
+        const screenHeight = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
+        const screenWidth = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
+
+        // D3.js code for database schema visualization
+        const width = screenWidth;
+        const height = screenHeight;
+       
+        const svg = d3.select("#database-schema")
+          .append("svg")
+          .attr("width", width)
+          .attr("height", height)
+          .call(d3.zoom().scaleExtent([0.5, 5]).on("zoom", zoomed))
+          .append("g");
+
+          const simulation = d3.forceSimulation()
+          .force("link", d3.forceLink().id(d => d.index).distance(100))
+          .force("charge", d3.forceManyBody().strength(-300))
+          .force("center", d3.forceCenter(width / 2, height / 2));
+
+        // Function to handle zooming
+        function zoomed(event) {
+          svg.attr("transform", event.transform);
+        }
+
+        // Function to draw tables
+        function drawTable(tableName, x, y,columns) {
+          const tableGroup = svg.append("g")
+            .attr("transform", `translate(${x},${y})`)
+            .attr("class", "table") // Add a class for styling
+            .on("click", function (event, d) {
+              zoomToTable(d);
+            });
+
+          // Draw table background
+          tableGroup.append("rect")
+            .attr("width", 200)
+            .attr("height", 40)
+            .attr("fill", "lightblue")
+            .attr("stroke", "black")
+            .attr("stroke-width", 2);
+
+          // Draw table name
+          tableGroup.append("text")
+            .attr("x", 100)
+            .attr("y", 20)
+            .attr("text-anchor", "middle")
+            .attr("fill", "black")
+            .text(tableName);
+
+          // Draw columns
+          // columns.forEach((column, index) => {
+          //   tableGroup.append("text")
+          //     .attr("x", 10)
+          //     .attr("y", 40 + index * 20)
+          //     .attr("fill", "black")
+          //     .text(column.field_name);
+          // });
+        }
+
+        // Draw tables based on the schema data
+        const tables = [];
+        for (const appName of schemaData.lst_apps) {
+          for (const modelName of schemaData.dct_data[appName].lst_app_models) {
+            const modelDetails = schemaData.dct_data[appName][modelName];
+            const columns = modelDetails.lst_column_details;
+            const joins = modelDetails.joins || [];
+            tables.push({ name: modelName, columns: columns, joins: joins });            
+          }
+        }
+
+        simulation.nodes(tables).on("end", () => {
+          // Draw tables after the simulation has ended
+          tables.forEach(table => {
+            table.x = Math.random() * width;
+            table.y = Math.random() * height;
+            drawTable(table.name, table.x, table.y);
+          });
+        });
+        
+        const links = tables.flatMap((table, i) => table.joins.map(join => ({ source: i, target: tables.findIndex(t => t.name === join.target_model) })));
+
+        // Draw joins
+        svg.selectAll(".join-line")
+          .data(links)
+          .enter().append("line")
+          .attr("class", "join-line")
+          .attr("stroke", "black")
+          .attr("stroke-width", 2)
+          .attr("marker-end", "url(#arrowhead)");
+
+          // Draw arrowhead marker
+        svg.append("defs")
+          .append("marker")
+          .attr("id", "arrowhead")
+          .attr("viewBox", "0 0 10 10")
+          .attr("refX", 5)
+          .attr("refY", 5)
+          .attr("markerWidth", 6)
+          .attr("markerHeight", 6)
+          .attr("orient", "auto-start-reverse")
+          .append("path")
+          .attr("d", "M 0 0 L 10 5 L 0 10 Z");
+          
+        // Draw joins between tables
+      // function drawJoins(joins) {
+      //   joins.forEach(join => {
+      //     const sourceTable = tables.find(table => table.name === join.source_model);
+      //     const targetTable = tables.find(table => table.name === join.target_model);
+
+      //     svg.append("line")
+      //       .attr("class", "join-line")
+      //       .attr("x1", sourceTable.x)
+      //       .attr("y1", sourceTable.y)
+      //       .attr("x2", targetTable.x)
+      //       .attr("y2", targetTable.y)
+      //       .attr("stroke", "black")
+      //       .attr("stroke-width", 2)
+      //       .attr("marker-end", "url(#arrowhead)");
+      //   });
+      // }
+      
+
+
+        
+
+        // simulation.nodes(tables).on("tick", () => {
+        //   svg.selectAll(".table")
+        //     .attr("transform", d => `translate(${d.x},${d.y})`);
+        //   svg.selectAll(".join-line")
+        //     .attr("x1", d => d.source.x)
+        //     .attr("y1", d => d.source.y)
+        //     .attr("x2", d => d.target.x)
+        //     .attr("y2", d => d.target.y);
+        // });
+
+        
+        
+        
+        // simulation.force("link").links(links);
+        
+
+        // tables.forEach(table => {
+        //   table.x = Math.random() * width;
+        //   table.y = Math.random() * height;
+        //   drawTable(table.name, table.x, table.y,table.columns);
+        // });
+
+        function zoomToTable(table) {
+          const scale = -2;  // Adjust the zoom level as needed
+          const [x, y] = [table.x * scale, table.y * scale];
+
+          svg.transition()
+            .duration(750)
+            .call(d3.zoom().scaleTo, scale, [x, y]);
+        }
+    });
+  </script>
+{% endblock %}
